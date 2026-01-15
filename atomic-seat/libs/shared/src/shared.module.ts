@@ -13,7 +13,7 @@ import { ConsulHelperService } from './lib/consul/consul-helper.service';
   imports: [
     MailModule,
     PassportModule,
-    ConfigModule,
+    ConfigModule.forRoot({ isGlobal: true }),
     JwtModule.registerAsync({
       useFactory: (configService: ConfigService): JwtModuleOptions => {
         const secret = configService.get<string>('JWT_SECRET');

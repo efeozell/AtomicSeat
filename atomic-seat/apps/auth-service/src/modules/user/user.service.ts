@@ -45,6 +45,10 @@ export class UserService {
     return userWithoutPassword;
   }
 
+  async updateUser(id: string, updateData: Partial<User>) {
+    await this.userRepo.update(id, updateData);
+  }
+
   async findByEmail(email: string) {
     const user = await this.userRepo.findOne({ where: { email } });
     if (!user) {
