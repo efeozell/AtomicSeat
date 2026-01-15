@@ -23,10 +23,18 @@ export class DatabaseModule {
           imports: [ConfigModule],
           useFactory: (configService: ConfigService) => {
             const host = configService.get<string>('DB_HOST');
-            const port = configService.get<number>('DB_PORT');
+            const port = Number(configService.get<string>('DB_PORT')) || 5432;
             const username = configService.get<string>('DB_USERNAME');
             const password = configService.get<string>('DB_PASSWORD');
             const database = configService.get<string>(dbNameEnvKey);
+
+            console.log('🔌 Database connection config:', {
+              host,
+              port,
+              username,
+              database,
+              dbNameEnvKey,
+            });
 
             if (!database) {
               throw new Error(

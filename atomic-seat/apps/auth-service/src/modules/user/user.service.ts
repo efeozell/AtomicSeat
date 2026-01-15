@@ -18,8 +18,8 @@ export class UserService {
   async createUser(createUserDto: CreateUserDto) {
     const { email, password, name, username } = createUserDto;
 
-    const existingUser = this.userRepo.findOne({
-      where: { email, username },
+    const existingUser = await this.userRepo.findOne({
+      where: { email },
     });
 
     if (existingUser) {
