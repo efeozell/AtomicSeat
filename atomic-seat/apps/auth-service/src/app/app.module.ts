@@ -1,9 +1,44 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { UserModule } from '../modules/user/user.module';
+import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
+import { DatabaseModule, SharedModule } from '@atomic-seat/shared';
 
 @Module({
-  imports: [],
+  imports: [
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService): JwtModuleOptions => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: configService.get<number>('JWT_EXPIRES_IN') || 3600,
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    ClientsModule.register([
+      {
+        name: 'EVENT_BUS',
+        transport: Transport.RMQ,
+        options: {
+          urls: ['amqp://localhost:5672'],
+          queue: 'events_queue',
+          queueOptions: {
+            durable: true,
+          },
+        },
+      },
+    ]),
+    UserModule,
+    DatabaseModule,
+    SharedModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

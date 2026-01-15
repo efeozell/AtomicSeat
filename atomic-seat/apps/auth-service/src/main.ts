@@ -11,6 +11,7 @@ import Consul from 'consul';
 import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
+  const logger = new Logger('AuthService');
   const app = await NestFactory.create(AppModule);
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.TCP,
@@ -23,20 +24,37 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   const consul = new Consul({ host: 'localhost', port: 8500 });
+  const serviceAddress =
+    configService.get<string>('consulServiceAddress') || 'host.docker.internal';
+  const servicePort = Number(configService.get<number>('authTcpPort')) || 3004;
 
   try {
     await consul.agent.service.register({
       name: 'auth-service',
+      id: 'auth-service-1',
+      address: serviceAddress,
+      port: servicePort,
+      check: {
+        name: 'auth-service TCP check',
+        tcp: `${serviceAddress}:${servicePort}`,
+        interval: '10s',
+        timeout: '5s',
+        deregistercriticalserviceafter: '1m',
+      },
     });
-  } catch (error) {}
+    console.log("✅ Consul'a başarıyla kaydedildi: auth-service");
+    logger.log("✅ Consul'a başarıyla kaydedildi: auth-service");
+  } catch (error) {
+    logger.log('Consul kayit hatasi: ' + error);
+    console.log('Consul kayit hatasi: ', error);
+  }
 
-  const globalPrefix = 'api';
-  app.setGlobalPrefix(globalPrefix);
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
-  Logger.log(
-    `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`,
-  );
+  await app.startAllMicroservices();
+  await app.listen(3001);
+  Logger.log(`🚀 Auth Microservice is running on TCP port: ${servicePort}`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.log('Error starting microservice: ', err);
+  process.exit(1);
+});
