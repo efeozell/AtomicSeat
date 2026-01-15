@@ -6,13 +6,22 @@ import * as nodemailer from 'nodemailer';
 export class MailService {
   private transporter: any;
   constructor(private readonly configService: ConfigService) {
+    const emailUser = this.configService.get<string>('EMAIL_USER');
+    const emailPass = this.configService.get<string>('EMAIL_PASSWORD');
+
+    if (!emailUser || !emailPass) {
+      throw new Error(
+        "EMAIL_USER ve EMAIL_PASS environment variable'lari tanimlanmali!",
+      );
+    }
+
     this.transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
       auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
-        pass: this.configService.get<string>('EMAIL_PASS'),
+        user: emailUser,
+        pass: emailPass,
       },
       tls: {
         rejectUnauthorized:

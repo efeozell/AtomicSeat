@@ -27,6 +27,11 @@ export class AppController {
     return this.appService.loginWithTwoFactorAuth(data);
   }
 
+  @MessagePattern({ cmd: 'enable-2fa' })
+  async handleEnableTwoFactorAuth(userId: string) {
+    return this.appService.enableTwoFactorAuth(userId);
+  }
+
   @MessagePattern({ cmd: 'logout' })
   async handleLogout(refreshToken: string) {
     return this.appService.logout(refreshToken);

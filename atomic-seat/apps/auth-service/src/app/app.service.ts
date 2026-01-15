@@ -169,6 +169,27 @@ export class AppService {
     }
   }
 
+  async enableTwoFactorAuth(userId: string) {
+    try {
+      const user = await this.userService.findById(userId);
+      if (!user) {
+        throw new InternalServerErrorException('Kullanici bulunamadi');
+      }
+
+      user.isTwoFactorAuthEnabled = true;
+      await this.userService.updateUser(userId, user);
+
+      return {
+        message: 'Iki faktorlu dogrulama basariyla etkinlestirildi',
+      };
+    } catch (error) {
+      console.log(`Two Factor Auth Error ${error}`);
+      throw new BadRequestException(
+        'Iki faktorlu dogrulama etkinlestirilirken hata olustu',
+      );
+    }
+  }
+
   async checkRefreshToken(refreshToken: string) {
     try {
       const userId = await this.redis.get(`refresh_token:${refreshToken}`);
