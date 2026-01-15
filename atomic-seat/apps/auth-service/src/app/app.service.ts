@@ -1,8 +1,9 @@
-import { CreateUserDto, LoginUserDto } from '@atomic-seat/shared';
+import { CreateUserDto, LoginUserDto, MailService } from '@atomic-seat/shared';
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { UserService } from '../modules/user/user.service';
 import { JwtService } from '@nestjs/jwt';
@@ -18,6 +19,7 @@ export class AppService {
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -53,8 +55,148 @@ export class AppService {
       const dummyHash = this.configService.get<string>('DUMMY_HASH');
       const targetPassword = user?.password || dummyHash;
 
-      const isPasswordValid = await bcrypt;
-    } catch (error) {}
+      const isPasswordValid = await bcrypt.compare(
+        dto.password,
+        targetPassword,
+      );
+
+      if (!isPasswordValid) {
+        throw new BadRequestException('Gecersiz email veya sifre');
+      }
+
+      if (user.isTwoFactorAuthEnabled) {
+        const code = await this.generateTwoFactorAuthCode({
+          userId: user.id,
+        });
+
+        try {
+          await this.mailService.sendMail(
+            user.email,
+            'Iki Faktorlu Dogrulama Kodu',
+            `<p>Dogrulama kodunuz: <b>${code}</b></p>`,
+          );
+        } catch (error) {
+          console.log(`Login'de dogrulama kodu gonderilirken hata olustu`);
+          throw new InternalServerErrorException(
+            'Dogrulama kodu gonderilirken hata olustu',
+          );
+        }
+
+        return {
+          statusCode: 206,
+          message:
+            'Iki faktorlu dogrulama kodu gonderildi lutfen mail kutunuzu kontrol edin',
+          userId: user.id,
+          require2FA: true,
+        };
+      }
+
+      const accessToken = this.generateAccessToken(
+        user.id,
+        user.email,
+        user.role,
+      );
+
+      const refreshToken = await this.generateRefreshToken(user.id);
+
+      const { password, ...result } = user;
+
+      return {
+        accessToken,
+        refreshToken,
+        user: result,
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Giriş işlemi sırasında beklenmedik bir hata oluştu.',
+      );
+    }
+  }
+
+  async loginWithTwoFactorAuth(data: { userId: string; code: string }) {
+    try {
+      const isCodeValid = await this.checkTwoFactorAuthCode({
+        userId: data.userId,
+        code: data.code,
+      });
+
+      if (!isCodeValid) {
+        throw new BadRequestException('Gecersiz dogrulama kodu');
+      }
+
+      await this.generateTwoFactorAuthCode({ userId: data.userId });
+
+      const user = await this.userService.findById(data.userId);
+
+      if (!user) {
+        throw new InternalServerErrorException('Kullanici bulunamadi');
+      }
+
+      const accessToken = this.generateAccessToken(
+        user.id,
+        user.email,
+        user.role,
+      );
+
+      const refreshToken = await this.generateRefreshToken(user.id);
+
+      return {
+        accessToken,
+        refreshToken,
+        user,
+      };
+    } catch (error) {
+      console.log(`2FA Kod ile giris yaparken hata ${error}`);
+      throw new BadRequestException(
+        'Iki faktorlu dogrulama ile giris yapilirken hata',
+      );
+    }
+  }
+
+  async logout(refreshToken: string) {
+    try {
+      await this.redis.del(`refresh_token:${refreshToken}`);
+      return { message: 'Basariyla cikis yapildi' };
+    } catch (error) {
+      console.log(`Cikis yapilirken bir hata ${error}`);
+      throw new BadRequestException(
+        'Cikis yapilirken beklenmedik bir hata olustu',
+      );
+    }
+  }
+
+  async checkRefreshToken(refreshToken: string) {
+    try {
+      const userId = await this.redis.get(`refresh_token:${refreshToken}`);
+      if (!userId) {
+        throw new UnauthorizedException('Gecersiz refresh token');
+      }
+
+      const user = await this.userService.findById(userId);
+      const newAccessToken = this.generateAccessToken(
+        user.id,
+        user.email,
+        user.role,
+      );
+
+      const newRefreshToken = await this.generateRefreshToken(user.id);
+
+      await this.redis.del(`refresh_token:${refreshToken}`);
+
+      return {
+        statusCode: 200,
+        message: 'Tekrar token basariyla olusturuldu',
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch (error) {
+      console.log(`Refresh Token dogrulanirken bir hata olustu: ${error}`);
+      throw new UnauthorizedException('Token refresh failed');
+    }
   }
 
   private generateAccessToken(userId: string, email: string, role: string) {
