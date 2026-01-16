@@ -1,6 +1,12 @@
-import { CreateUserDto, LoginUserDto, MailService } from '@atomic-seat/shared';
+import {
+  AuthCreatedEvent,
+  CreateUserDto,
+  LoginUserDto,
+  MailService,
+} from '@atomic-seat/shared';
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   UnauthorizedException,
@@ -12,10 +18,12 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import * as bcrypt from 'bcrypt';
+import { ClientProxy } from '@nestjs/microservices';
 
 @Injectable()
 export class AppService {
   constructor(
+    @Inject('EVENT_BUS') private readonly eventBus: ClientProxy,
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -26,6 +34,17 @@ export class AppService {
   async register(dto: CreateUserDto) {
     try {
       const user = await this.userService.createUser(dto);
+
+      const event = new AuthCreatedEvent(
+        user.id,
+        user.email,
+        user.name,
+        user.username,
+        user.role,
+        user.createdAt,
+      );
+
+      this.eventBus.emit('user.created', event);
 
       return {
         statusCode: 201,

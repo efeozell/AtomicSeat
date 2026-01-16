@@ -42,7 +42,9 @@
         "apps/api-gateway-e2e/**/*",
         "apps/auth-service-e2e/**/*",
         "apps/booking-service-e2e/**/*",
-        "apps/payment-service-e2e/**/*"
+        "apps/payment-service-e2e/**/*",
+        "catalog-service-e2e/**/*",
+        "apps/catalog-service-e2e/**/*"
       ]
     }
   ]

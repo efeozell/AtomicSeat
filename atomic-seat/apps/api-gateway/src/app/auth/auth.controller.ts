@@ -144,7 +144,49 @@ export class AuthController {
     return { message: 'Cikis basarili' };
   }
 
-  //TODO: Kullanici login sistemi eklenecek cookielere token donulecek.
+  @Post('refresh')
+  async refreshToken(
+    @Res({ passthrough: true }) response: Response,
+    @Req() request: Request,
+  ) {
+    try {
+      const token = request.cookies['Refresh'];
+      if (!token) {
+        throw new BadRequestException('Refresh token bulunamadi');
+      }
+
+      const result = await this.msClient.send(
+        'auth-service',
+        { cmd: 'refreshToken' },
+        token,
+      );
+
+      response.cookie('Authentication', result.accessToken, {
+        httpOnly: true,
+        secure: this.configService.get<string>('NODE_ENV') === 'production',
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000, // 15 dakika
+      });
+
+      response.cookie('Refresh', result.refreshToken, {
+        httpOnly: true,
+        secure: this.configService.get<string>('NODE_ENV') === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 gün
+      });
+
+      return {
+        statusCode: 200,
+        message: 'Token yenileme basarili',
+      };
+    } catch (error) {
+      console.log(
+        `RefreshToken uretilirken hata path: /api-gateway/auth/auth.controller ${error}`,
+      );
+      throw new BadRequestException('Token yenilenirken hata olustu');
+    }
+  }
+
   //TODO: auth.service.ts dosyainda kullanici olusturulduktan sonra rabbitMQ'ya emit atilacak. Daha sonra bunu dinleyen
   //diger servisler kendi db'lerinde birer kopya olusturucak.
 }
