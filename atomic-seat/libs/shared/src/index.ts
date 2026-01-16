@@ -11,3 +11,8 @@ export * from './lib/auth/guards/jwt-auth.guard';
 export * from './lib/auth/strategies/jwt-strategy';
 export * from './lib/consul/consul-helper.service';
 export * from './lib/transport/microservice-client.service';
+export * from './lib/events/auth.events';
+export * from './lib/filters/rpc-exception.filter';
+export * from './lib/dtos/create-event.dto';
+export * from './lib/dtos/create-venues.dto';
+export * from './lib/dtos/update-venues.dto';
