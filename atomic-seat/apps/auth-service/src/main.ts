@@ -50,7 +50,6 @@ async function bootstrap() {
   }
 
   await app.startAllMicroservices();
-  await app.listen(3001);
   Logger.log(`🚀 Auth Microservice is running on TCP port: ${servicePort}`);
 }
 

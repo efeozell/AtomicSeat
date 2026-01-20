@@ -2,6 +2,8 @@ import {
   IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsObject,
+  IsOptional,
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -22,10 +24,6 @@ export class CreateEventDto {
   @IsNotEmpty()
   name!: string;
 
-  @IsNumber()
-  @IsNotEmpty()
-  capacity!: number;
-
   @IsString()
   @IsNotEmpty()
   description!: string;
@@ -40,5 +38,11 @@ export class CreateEventDto {
   venue_id!: string;
 
   @IsEnum(['draft', 'published', 'cancelled', 'sold_out'])
+  @IsOptional()
   status!: string;
+
+  @IsObject()
+  pricing!: {
+    [section: string]: number; // { "A": 500, "B": 300, "VIP": 1000 }
+  };
 }

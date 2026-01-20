@@ -3,11 +3,13 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Venues } from '../venues/venues.entity';
+import { EventSeat } from './event-seat.entity';
 
-enum EventType {
+export enum EventType {
   CONCERT = 'CONCERT',
   SPORTS = 'SPORTS',
   THEATER = 'THEATER',
@@ -21,7 +23,7 @@ export class Events {
   id: string;
 
   @Column({ nullable: false, type: 'enum', enum: EventType })
-  type: EventType;
+  eventType: EventType;
 
   @Column({ nullable: false })
   name: string;
@@ -51,9 +53,25 @@ export class Events {
 
   @Column({
     type: 'enum',
-    enum: ['draft', 'published', 'cancelled', 'sold_out'],
+    enum: ['draft', 'published', 'cancelled', 'sold_out', 'preparing'],
   })
   status: string;
+
+  @Column({ type: 'int', default: 0 })
+  total_seats: number;
+
+  @Column({ type: 'int', default: 0 })
+  available_seats: number;
+
+  @Column({ type: 'int', default: 0 })
+  reserved_seats: number;
+
+  @Column({ type: 'int', default: 0 })
+  sold_seats: number;
+
+  //Bir eventin birden fazla event seati olabilir
+  @OneToMany(() => EventSeat, (seat) => seat.event)
+  seats: EventSeat[];
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;

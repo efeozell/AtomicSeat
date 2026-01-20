@@ -1,9 +1,19 @@
 //Burasi Mekanin fiziksel koltuk planinin tasarim bilgilerinin tutuldugu entity olucak.
 
-import { Column, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Venues } from './venues.entity';
 
 //Burada fiyat, durum bilgisi degil sadece koltugun fiziksel olarak bilgileri tutulacak
+@Entity('venue_seat_templates')
+@Index(['venue_id', 'section', 'row', 'seat_number'], { unique: true }) //Ayni mekanda, ayni sectionda, ayni rowda ayni koltuk numarasi olamaz
+@Index(['venue_id', 'section'])
 export class VenueSeatTemplate {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -12,7 +22,11 @@ export class VenueSeatTemplate {
   @Column()
   venue_id: string;
 
-  @ManyToOne(() => Venues, { onDelete: 'CASCADE' })
+  //Her koltugun bir mekani olzmali
+  @ManyToOne(() => Venues, (venue) => venue.seat_templates, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'venue_id' })
   venue: Venues;
 
   @Column({ length: 50 })
