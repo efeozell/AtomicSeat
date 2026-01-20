@@ -7,7 +7,7 @@ export class CreateVenueDto {
 
   @IsString()
   @IsOptional()
-  description!: string;
+  description?: string;
 
   @IsString()
   @IsNotEmpty()

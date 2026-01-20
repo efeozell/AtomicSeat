@@ -6,7 +6,7 @@ import { AuthController } from './auth/auth.controller';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { CataloServiceController } from './catalog-service/catalog-service.controller';
+import { CatalogServiceController } from './catalog-service/catalog-service.controller';
 
 @Module({
   imports: [
@@ -27,7 +27,7 @@ import { CataloServiceController } from './catalog-service/catalog-service.contr
       inject: [ConfigService],
     }),
   ],
-  controllers: [AppController, AuthController, CataloServiceController],
+  controllers: [AppController, AuthController, CatalogServiceController],
   providers: [AppService, JwtStrategy],
 })
 export class AppModule {}

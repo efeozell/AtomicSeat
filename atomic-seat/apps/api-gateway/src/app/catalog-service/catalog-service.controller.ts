@@ -21,7 +21,7 @@ import {
 
 @Controller('catalog')
 @UseGuards(JwtAuthGuard, RolesGuard)
-export class CataloServiceController {
+export class CatalogServiceController {
   constructor(private readonly msClient: MicroserviceClientService) {}
 
   @Get('health')
@@ -182,29 +182,37 @@ export class CataloServiceController {
    * EVENT ENDPOINTLERI
    */
 
-  @Post('events/test-queue')
-  async testQueue() {
-    const result = await this.msClient.send(
-      'catalog-service',
-      {
-        cmd: 'test-queue',
-      },
-      {},
-    );
-
-    return result;
-  }
-
   @Post('events/create')
   @Roles(UserRole.ADMIN)
   async createEvent(@Body() dto: CreateEventDto) {
-    const result = await this.msClient.send(
-      'catalog-service',
-      { cmd: 'create-event' },
-      dto,
-    );
+    try {
+      const result = await this.msClient.send(
+        'catalog-service',
+        { cmd: 'create-event' },
+        dto,
+      );
 
-    return result;
+      return result;
+    } catch (error) {
+      console.log(`Event olusturulurken hata ${error}, ${error.message}`);
+      throw new BadRequestException('Event olusturulurken hata olustu');
+    }
+  }
+
+  @Get('events/all')
+  async getAllEvents() {
+    try {
+      const result = await this.msClient.send(
+        'catalog-service',
+        { cmd: 'find-all-events' },
+        {},
+      );
+
+      return result;
+    } catch (error) {
+      console.log(`Tum eventler getirilirken hata ${error} ${error.message}`);
+      throw new BadRequestException('Tum eventler getirilirken hata olustu');
+    }
   }
 
   @Get('events/:id')
@@ -227,6 +235,7 @@ export class CataloServiceController {
     }
   }
 
+  //TODO: Pagination ekle
   @Get('events/:id/seats')
   async getSeatsByEvent(@Param('id') eventId: string) {
     try {
@@ -267,22 +276,6 @@ export class CataloServiceController {
       throw new BadRequestException(
         'Event musait koltuklari getirilirken hata olustu',
       );
-    }
-  }
-
-  @Get('events/all')
-  async getAllEvents() {
-    try {
-      const result = await this.msClient.send(
-        'catalog-service',
-        { cmd: 'find-all-events' },
-        null,
-      );
-
-      return result;
-    } catch (error) {
-      console.log(`Tum eventler getirilirken hata ${error} ${error.message}`);
-      throw new BadRequestException('Tum eventler getirilirken hata olustu');
     }
   }
 }

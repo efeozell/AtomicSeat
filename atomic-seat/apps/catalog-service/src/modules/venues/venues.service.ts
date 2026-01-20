@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -59,17 +60,20 @@ export class VenuesService {
       `Olusturuluyor ${seatsToCreate.length} koltuk var su mekan icin ${venue.name}`,
     );
 
-    const result = await this.venueSeatTemplateRepo
-      .createQueryBuilder()
-      .insert()
-      .into(VenueSeatTemplate)
-      .values(seatsToCreate)
-      .execute();
+    await this.venuesRepo.manager.transaction(async (manager) => {
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into(VenueSeatTemplate)
+        .values(seatsToCreate)
+        .execute();
 
-    //Venue'nin toplam kapasitesini guncelliyoruz
-
-    await this.venuesRepo.update(venueId, {
-      total_capacity: seatsToCreate.length,
+      await manager.increment(
+        Venues,
+        { id: venueId },
+        'total_capacity',
+        seatsToCreate.length,
+      );
     });
 
     console.log(`✅ ${seatsToCreate.length} koltuk basariyla olusturuldu`);
@@ -104,7 +108,7 @@ export class VenuesService {
       });
 
       if (existingSeat) {
-        throw new NotFoundException('Seat already exists');
+        throw new BadRequestException('Seat already exists');
       }
 
       const newSeat = this.venueSeatTemplateRepo.create({
@@ -123,6 +127,14 @@ export class VenuesService {
       return savedSeat;
     } catch (error) {
       console.log(`venues.service.ts findOne hata: ${error} ${error.message}`);
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
       throw new BadRequestException('Koltuk eklenirken hata olustu');
     }
   }
@@ -189,8 +201,19 @@ export class VenuesService {
 
       return { message: 'Venue removed successfully' };
     } catch (error) {
-      console.log(`venues.service.ts remove hata: ${error} ${error.message}`);
-      throw new BadRequestException('Mekan silinirken hata olustu');
+      // Preserve HTTP exceptions (NotFoundException, HttpException, etc.)
+      if (
+        error instanceof NotFoundException ||
+        error instanceof HttpException
+      ) {
+        throw error;
+      }
+
+      // Only wrap non-HTTP errors in BadRequestException
+      console.log(`venues.service.ts remove hata: ${error.message}`);
+      throw new BadRequestException(
+        `Mekan silinirken hata olustu: ${error.message || 'Unknown error'}`,
+      );
     }
   }
 

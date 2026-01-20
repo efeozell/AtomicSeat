@@ -5,11 +5,14 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 
 @Catch()
 export class RpcExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(RpcExceptionFilter.name);
+
   catch(exception: any, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse();
@@ -71,11 +74,11 @@ export class RpcExceptionFilter implements ExceptionFilter {
     }
 
     // Loglama (production'da daha detaylı logging yapabilirsiniz)
-    console.error('Exception caught:', {
+    this.logger.error('Exception caught:', {
       status,
       message,
       error,
-      exception: exception,
+      exception: exception?.stack,
       path: request.url,
     });
 

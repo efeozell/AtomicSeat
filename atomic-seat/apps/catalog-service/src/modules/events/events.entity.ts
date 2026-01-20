@@ -22,7 +22,7 @@ export class Events {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ nullable: false, type: 'enum', enum: EventType })
+  @Column({ name: 'type', nullable: false, type: 'enum', enum: EventType })
   eventType: EventType;
 
   @Column({ nullable: false })

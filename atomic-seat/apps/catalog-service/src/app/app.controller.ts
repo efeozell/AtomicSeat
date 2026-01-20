@@ -23,12 +23,7 @@ export class AppController {
 
   @MessagePattern({ cmd: 'health-check' })
   async healthCheckMessage() {
-    try {
-      return { status: 'ok' };
-    } catch (error) {
-      console.log(`HEALTH CHECK HATASI ${error}`);
-      throw new BadRequestException('Health check hatasi');
-    }
+    return { status: 'ok' };
   }
 
   /**
@@ -38,9 +33,9 @@ export class AppController {
   @MessagePattern({ cmd: 'create-venue' })
   async createVenue(dto: CreateVenueDto) {
     try {
-      return this.venueService.createVenue(dto);
+      return await this.venueService.createVenue(dto);
     } catch (error) {
-      console.log(
+      console.error(
         `catalog-service'de create venue hatasi: ${error} ${error.message}`,
       );
       throw new BadRequestException('Mekan olusturulurken hata olustu');

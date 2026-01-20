@@ -37,12 +37,15 @@ export class CreateVenueSeatsDto {
 
 export class CreateSingleSeatDto {
   @IsString()
+  @IsNotEmpty()
   section!: string;
 
   @IsString()
+  @IsNotEmpty()
   row!: string;
 
   @IsString()
+  @IsNotEmpty()
   seatNumber!: string;
 
   @IsString()

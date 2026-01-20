@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Events, EventType } from './events.entity';
 import { DataSource, Repository } from 'typeorm';
@@ -48,7 +52,7 @@ export class EventsService {
     });
 
     if (eventIsExist) {
-      throw new NotFoundException(
+      throw new ConflictException(
         'Ayni isim ve aciklamaya sahip event zaten mevcut',
       );
     }
@@ -97,9 +101,9 @@ export class EventsService {
     try {
       console.log(`Koltuklar hazirlaniyor su event icin ${eventId}`);
       //Ilgili venue'nin koltuk template'lerini al
-      const venueSeatTepmlates = await this.venueSeatRepo.find({
-        where: { venue_id: venueId, is_active: true },
-      });
+      const venueSeatTepmlates = await queryRunner.manager
+        .getRepository(VenueSeatTemplate)
+        .find({ where: { venue_id: venueId, is_active: true } });
 
       console.log(`Koltuk templatelerin bulundu ${venueSeatTepmlates.length}`);
 

@@ -48,7 +48,7 @@ export class EventPreparationProcessor extends WorkerHost {
 
   private async handleSeatPreparation(job: Job) {
     this.logger.log(`🔄 Processing Job ${job.id} - Event: ${job.data.eventId}`);
-    console.log('PREPATE-SEATS PROCCESSORE GIRDI MI?');
+    console.log('PREPARE-SEATS PROCCESSORE GIRDI MI?');
 
     const { eventId, venueId, pricing } = job.data;
 
@@ -78,7 +78,7 @@ export class EventPreparationProcessor extends WorkerHost {
         console.error('Kritik: Telafi işlemi de başarısız oldu!', deleteError);
       }
 
-      throw new BadRequestException('Koltuk hazirlama islemi basarisiz oldu');
+      throw error;
     }
   }
 

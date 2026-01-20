@@ -39,7 +39,7 @@ export class CreateEventDto {
 
   @IsEnum(['draft', 'published', 'cancelled', 'sold_out'])
   @IsOptional()
-  status!: string;
+  status?: string;
 
   @IsObject()
   pricing!: {
