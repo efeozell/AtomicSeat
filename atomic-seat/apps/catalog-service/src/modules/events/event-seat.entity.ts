@@ -5,6 +5,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  VersionColumn,
 } from 'typeorm';
 import { VenueSeatTemplate } from '../venues/venue-seat-template.entity';
 import { Events } from './events.entity';
@@ -25,6 +26,9 @@ export enum EventSeatStatus {
 export class EventSeat {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @VersionColumn({ nullable: true })
+  version: number;
 
   @Column()
   event_id: string;
@@ -56,6 +60,9 @@ export class EventSeat {
 
   @Column({ type: 'timestamp', nullable: true })
   reserved_at: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  reserved_until: Date;
 
   @Column({ nullable: true })
   sold_to: string;
