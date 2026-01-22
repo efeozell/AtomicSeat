@@ -3,7 +3,14 @@ import {
   JwtAuthGuard,
   MicroserviceClientService,
 } from '@atomic-seat/shared';
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { Request } from 'express';
 
 @Controller('booking')
@@ -15,9 +22,11 @@ export class BookingServiceController {
   async createBooking(@Body() dto: CreateBookingDto, @Req() req: Request) {
     const userId = req.user?.['userId'];
 
-    console.log(`USER ID: ${userId}`);
+    if (!userId || typeof userId !== 'string') {
+      throw new UnauthorizedException('Gecersiz token veya userId bulunamadi');
+    }
 
-    dto.userId = userId as string;
+    dto.userId = userId;
 
     console.log(`DTO.USERID ${dto.userId}`);
 

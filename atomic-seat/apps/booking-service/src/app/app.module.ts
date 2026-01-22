@@ -6,7 +6,6 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Booking } from './booking/booking.entity';
 import { BookingSeat } from './booking/booking-seat.entity';
-import { retry } from 'rxjs';
 
 @Module({
   imports: [
