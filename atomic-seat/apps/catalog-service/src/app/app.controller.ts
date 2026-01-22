@@ -80,11 +80,6 @@ export class AppController {
    * EVENT SERVISLERI
    */
 
-  @MessagePattern({ cmd: 'test-queue' })
-  async testQueue() {
-    return this.eventService.testQueue();
-  }
-
   @MessagePattern({ cmd: 'create-event' })
   async createEvent(dto: CreateEventDto) {
     return this.eventService.createEvent(dto);
@@ -108,5 +103,47 @@ export class AppController {
   @MessagePattern({ cmd: 'find-all-events' })
   async findAllEvents() {
     return this.eventService.getAllEvents();
+  }
+
+  /**
+   * Booking Service'de kullanacagimiz methodlar burada olacak
+   */
+
+  @MessagePattern({ cmd: 'catalog-seats-check' })
+  async checkSeatsAvailability(data: { seatIds: string[] }) {
+    return await this.eventService.checkSeatAvailability(data.seatIds);
+  }
+
+  @MessagePattern({ cmd: 'catalog-seats-reserve' })
+  async reserveSeats(data: {
+    seatIds: string[];
+    userId: string;
+    bookingId: string;
+    expiresAt: Date;
+  }) {
+    return await this.eventService.reserveSeats(
+      data.seatIds,
+      data.userId,
+      data.bookingId,
+      data.expiresAt,
+    );
+  }
+
+  @MessagePattern({ cmd: 'catalog-seats-confirm' })
+  async confirmSeats(data: {
+    seatIds: string[];
+    userId: string;
+    bookingId: string;
+  }) {
+    return await this.eventService.confirmSeats(
+      data.seatIds,
+      data.userId,
+      data.bookingId,
+    );
+  }
+
+  @MessagePattern({ cmd: 'catalog-seats-release' })
+  async releaseSeats(data: { seatIds: string[]; bookingId: string }) {
+    return await this.eventService.releaseSeats(data.seatIds, data.bookingId);
   }
 }

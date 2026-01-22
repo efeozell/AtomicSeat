@@ -69,7 +69,11 @@ export class EventPreparationProcessor extends WorkerHost {
       );
 
       try {
-        await this.eventRepo.delete({ id: eventId });
+        await this.eventRepo.update(eventId, {
+          status: 'failed',
+          failureReason:
+            'Sistem yogunlugu nedeniyle koltuklar olusturulmadi. Lutfen tekrar deneyin',
+        });
         console.error(
           `Koltuk hazirlama islemi basarisiz oldu ${eventId}: Basarisiz Event silindi`,
           error,

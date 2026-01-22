@@ -21,3 +21,4 @@ export * from './lib/dtos/create-venue.dto';
 export * from './lib/dtos/create-venue-seats.dto';
 export * from './lib/filters/http-to-rpc-exception.filter';
 export * from './lib/filters/rpc-exception.filter';
+export * from './lib/dtos/create-booking.dto';

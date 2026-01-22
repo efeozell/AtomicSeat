@@ -53,9 +53,19 @@ export class Events {
 
   @Column({
     type: 'enum',
-    enum: ['draft', 'published', 'cancelled', 'sold_out', 'preparing'],
+    enum: [
+      'draft',
+      'published',
+      'cancelled',
+      'sold_out',
+      'preparing',
+      'failed',
+    ],
   })
   status: string;
+
+  @Column({ nullable: true })
+  failureReason: string;
 
   @Column({ type: 'int', default: 0 })
   total_seats: number;

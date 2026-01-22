@@ -1,11 +1,13 @@
 import {
+  BadGatewayException,
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Events, EventType } from './events.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { CreateEventDto } from '@atomic-seat/shared';
 import { EventSeat, EventSeatStatus } from './event-seat.entity';
 import { VenueSeatTemplate } from '../venues/venue-seat-template.entity';
@@ -28,16 +30,6 @@ export class EventsService {
     private readonly eventPrepareQueue: Queue,
   ) {
     console.log('✅ EventsService initialized with queue');
-  }
-
-  async testQueue() {
-    const job = await this.eventPrepareQueue.add('test-job', {
-      eventId: 'test-123',
-      venueId: 'test-venue',
-      pricing: { A: 100 },
-    });
-
-    return { message: 'Job eklendi', jobId: job.id };
   }
 
   async createEvent(dto: CreateEventDto): Promise<Events> {
@@ -120,6 +112,12 @@ export class EventsService {
         },
       );
 
+      if (eventSeats.length === 0) {
+        throw new BadGatewayException(
+          "Event icin koltuk olusturulamadi, lutfen venue koltuk template'lerini kontrol ediniz",
+        );
+      }
+
       await queryRunner.manager.getRepository(EventSeat).insert(eventSeats);
 
       console.log(`✅ ${eventSeats.length} koltuk transaction icine eklendi`);
@@ -188,6 +186,7 @@ export class EventsService {
       },
     });
   }
+
   async getAllEvents(): Promise<Events[]> {
     return this.eventRepo.find({
       relations: ['venue'],
@@ -214,5 +213,186 @@ export class EventsService {
     const multiplier = multipliers[template.seat_type] || 1;
 
     return basePrice * multiplier;
+  }
+
+  //Booking Service icin event islemleri
+
+  async checkSeatAvailability(seatIds: string[]) {
+    const seats = await this.eventSeatRepo.find({
+      where: { id: In(seatIds) },
+      select: ['id', 'status', 'price', 'event_id'],
+    });
+
+    if (seats.length !== seatIds.length) {
+      return {
+        success: false,
+        error: 'Bazi koltuklar bulunamadi',
+        availableSeats: [],
+      };
+    }
+
+    const unavailableSeats = seats.filter(
+      (seat) => seat.status !== EventSeatStatus.AVAILABLE,
+    );
+
+    if (unavailableSeats.length > 0) {
+      return {
+        success: false,
+        error: 'Bazi koltuklar uygun degil',
+        unavailableSeats: unavailableSeats.map((s) => s.id),
+      };
+    }
+
+    //Her bir koltugun fiyatini bir degiskende topladik
+    const totalPrice = seats.reduce((sum, seat) => sum + Number(seat.price), 0);
+
+    return {
+      success: true,
+      seats: seats.map((s) => ({
+        id: s.id,
+        price: s.price,
+        eventId: s.event_id,
+      })),
+      totalPrice: totalPrice,
+    };
+  }
+
+  async reserveSeats(
+    seatIds: string[],
+    userId: string,
+    bookingId: string,
+    expiresAt: Date,
+  ) {
+    const reserveSeatsResult = await this.dataSource.transaction(
+      async (manager) => {
+        try {
+          // Optimistic locking icin version ile birlikte koltuklari cek
+          const seats = await manager.find(EventSeat, {
+            where: { id: In(seatIds) },
+          });
+
+          if (seats.length !== seatIds.length) {
+            throw new BadRequestException('Bazi koltuklar bulunamadi');
+          }
+
+          const unavailableSeats = seats.filter(
+            (seat) => seat.status !== EventSeatStatus.AVAILABLE,
+          );
+
+          if (unavailableSeats.length > 0) {
+            throw new BadRequestException(
+              `Koltuklar musait degil: ${unavailableSeats.map((s) => s.id).join(',')}`,
+            );
+          }
+
+          const totalPrice = seats.reduce(
+            (sum, seat) => sum + Number(seat.price),
+            0,
+          );
+
+          // Her koltuğu güncelle - TypeORM otomatik olarak version kontrolü yapar
+          for (const seat of seats) {
+            seat.status = EventSeatStatus.RESERVED;
+            seat.reserved_by = userId;
+            seat.reserved_at = new Date();
+            seat.reserved_until = expiresAt;
+
+            // save() çağrısı sırasında TypeORM version kontrolü yapar
+            // Eğer version değişmişse OptimisticLockVersionMismatchError fırlatır
+            await manager.save(EventSeat, seat);
+          }
+
+          console.log(
+            `✅ ${seats.length} koltuk rezerve edildi - Booking: ${bookingId}`,
+          );
+
+          return {
+            success: true,
+            message: `${seats.length} koltuk basariyla rezerve edildi`,
+            seats: seats.map((s) => ({
+              id: s.id,
+              price: s.price,
+              eventId: s.event_id,
+              version: s.version,
+            })),
+            totalPrice,
+          };
+        } catch (error) {
+          console.log(
+            `❌ Koltuklar rezerve edilirken hata: ${error.name} - ${error.message}`,
+          );
+
+          // OptimisticLockVersionMismatchError veya version içeren hatalar
+          if (
+            error.name === 'OptimisticLockVersionMismatchError' ||
+            error.message.includes('version')
+          ) {
+            return {
+              success: false,
+              error:
+                'Koltuklar zaten baska bir kullanici tarafindan rezerve edilmis',
+            };
+          }
+
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+    );
+
+    return reserveSeatsResult;
+  }
+
+  async confirmSeats(seatIds: string[], userId: string, bookingId: string) {
+    const result = await this.eventSeatRepo.update(
+      { id: In(seatIds), reserved_by: userId },
+      {
+        status: EventSeatStatus.SOLD,
+        sold_to: userId,
+        sold_at: new Date(),
+      },
+    );
+
+    if (result.affected !== seatIds.length) {
+      throw new BadRequestException(
+        `Beklenen ${seatIds.length} koltuk yerine ${result.affected} koltuk guncellendi`,
+      );
+    }
+
+    console.log(`✅ ${seatIds.length} koltuk satildi - Booking: ${bookingId}`);
+
+    return {
+      success: true,
+      message: `${seatIds.length} koltuk basariyla satildi`,
+    };
+  }
+
+  async releaseSeats(seatIds: string[], bookingId: string) {
+    const result = await this.eventSeatRepo.update(
+      { id: In(seatIds) },
+      {
+        status: EventSeatStatus.AVAILABLE,
+        reserved_by: null,
+        reserved_at: null,
+        reserved_until: null,
+      },
+    );
+
+    if (result.affected === 0) {
+      throw new BadRequestException(
+        'Koltuklar serbest birakilirken hata olustu',
+      );
+    }
+
+    console.log(
+      `✅ ${seatIds.length} koltuk serbest birakildi - Booking: ${bookingId}`,
+    );
+
+    return {
+      success: true,
+      message: `${seatIds.length} koltuk basariyla serbest birakildi`,
+    };
   }
 }

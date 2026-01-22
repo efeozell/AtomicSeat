@@ -1,12 +1,14 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { AppService } from './app.service';
+import { CreateBookingDto } from '@atomic-seat/shared';
+import { MessagePattern } from '@nestjs/microservices';
 
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get()
-  getData() {
-    return this.appService.getData();
+  @MessagePattern({ cmd: 'create-booking' })
+  async createBooking(dto: CreateBookingDto) {
+    return this.appService.createBooking(dto);
   }
 }
