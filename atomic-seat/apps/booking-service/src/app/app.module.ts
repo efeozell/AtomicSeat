@@ -6,9 +6,12 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Booking } from './booking/booking.entity';
 import { BookingSeat } from './booking/booking-seat.entity';
+import { BookingsCron } from './booking/booking.cron';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     DatabaseModule.forRoot('BOOKING_DB_NAME'),
     TypeOrmModule.forFeature([Booking, BookingSeat]),
     SharedModule,
@@ -35,6 +38,6 @@ import { BookingSeat } from './booking/booking-seat.entity';
     ]),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, BookingsCron],
 })
 export class AppModule {}

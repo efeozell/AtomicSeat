@@ -111,4 +111,85 @@ export class AppService {
       throw new BadRequestException('Rezervasyon olusturulurken hata.');
     }
   }
+
+  async confirmBooking(bookingId: string, paymentId: string) {
+    const booking = await this.bookingRepo.findOne({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new BadRequestException('Booking bulunamadi');
+    }
+
+    if (booking.status !== BookingStatus.PENDING) {
+      throw new BadRequestException('Booking onaylanamaz, durumu uygun degil');
+    }
+
+    try {
+      await this.msClient.send(
+        'catalog-service',
+        { cmd: 'catalog-seats-confirm' },
+        {
+          seatIds: booking.seat_ids,
+          userId: booking.user_id,
+          bookingId: bookingId,
+        },
+      );
+    } catch (error) {
+      this.logger.error(`Catalog service confirm hatasi: ${error}`);
+      throw new BadRequestException('Koltuk onaylama hatasi');
+    }
+
+    await this.bookingRepo.update(bookingId, {
+      status: BookingStatus.CONFIRMED,
+      payment_id: paymentId,
+      paid_at: new Date(),
+    });
+
+    console.log(`✅ Booking onaylandi`);
+  }
+
+  async cancelBooking(bookingId: string, reason: string): Promise<void> {
+    const booking = await this.bookingRepo.findOne({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new BadRequestException('Booking bulunamadi');
+    }
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestException('Booking zaten iptal edilmis');
+    }
+
+    if (booking.status === BookingStatus.CONFIRMED) {
+      this.logger.warn(`Onaylanmis booking iptal ediliyor: ${bookingId}`);
+    }
+
+    await this.msClient.send(
+      'catalog-service',
+      {
+        cmd: 'catalog-seats-release',
+      },
+      {
+        seatIds: booking.seat_ids,
+        bookingId: bookingId,
+      },
+    );
+
+    await this.bookingRepo.update(bookingId, {
+      status: BookingStatus.CANCELLED,
+      cancelled_reason: reason,
+      cancalled_at: new Date(),
+    });
+
+    console.log(`🚨 Booking Iptal edildi: ${bookingId} - ${reason}`);
+  }
+
+  async getUserBookings(userId: string): Promise<Booking[]> {
+    return await this.bookingRepo.find({
+      where: { user_id: userId },
+      order: { created_at: 'DESC' },
+    });
+  }
 }
