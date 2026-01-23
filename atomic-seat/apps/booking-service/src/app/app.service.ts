@@ -78,7 +78,7 @@ export class AppService {
       const savedBooking = await this.bookingRepo.save(booking);
 
       console.log(`✅ Booking basariyla olusturuldu ${savedBooking}`);
-      
+
       try {
         await this.kafkaClient.emit('booking-created', {
           bookingId: savedBooking.id,
@@ -121,15 +121,24 @@ export class AppService {
       throw new BadRequestException('Booking bulunamadi');
     }
 
-    await this.msClient.send(
-      'catalog-service',
-      { cmd: 'catalog-seats-confirm' },
-      {
-        seatIds: booking.seat_ids,
-        userId: booking.user_id,
-        bookingId: bookingId,
-      },
-    );
+    if (booking.status !== BookingStatus.PENDING) {
+      throw new BadRequestException('Booking onaylanamaz, durumu uygun degil');
+    }
+
+    try {
+      await this.msClient.send(
+        'catalog-service',
+        { cmd: 'catalog-seats-confirm' },
+        {
+          seatIds: booking.seat_ids,
+          userId: booking.user_id,
+          bookingId: bookingId,
+        },
+      );
+    } catch (error) {
+      this.logger.error(`Catalog service confirm hatasi: ${error}`);
+      throw new BadRequestException('Koltuk onaylama hatasi');
+    }
 
     await this.bookingRepo.update(bookingId, {
       status: BookingStatus.CONFIRMED,
@@ -147,6 +156,14 @@ export class AppService {
 
     if (!booking) {
       throw new BadRequestException('Booking bulunamadi');
+    }
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestException('Booking zaten iptal edilmis');
+    }
+
+    if (booking.status === BookingStatus.CONFIRMED) {
+      this.logger.warn(`Onaylanmis booking iptal ediliyor: ${bookingId}`);
     }
 
     await this.msClient.send(
