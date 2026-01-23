@@ -186,7 +186,4 @@ export class AuthController {
       throw new BadRequestException('Token yenilenirken hata olustu');
     }
   }
-
-  //TODO: auth.service.ts dosyainda kullanici olusturulduktan sonra rabbitMQ'ya emit atilacak. Daha sonra bunu dinleyen
-  //diger servisler kendi db'lerinde birer kopya olusturucak.
 }

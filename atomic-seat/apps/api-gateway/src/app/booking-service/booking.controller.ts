@@ -6,6 +6,7 @@ import {
 import {
   Body,
   Controller,
+  Get,
   Post,
   Req,
   UnauthorizedException,
@@ -34,6 +35,24 @@ export class BookingServiceController {
       'booking-service',
       { cmd: 'create-booking' },
       dto,
+    );
+  }
+
+  @Get('user')
+  @UseGuards(JwtAuthGuard)
+  async getUserBookings(@Req() req: Request) {
+    const userId = req.user?.['userId'];
+
+    if (!userId || typeof userId !== 'string') {
+      throw new UnauthorizedException(
+        'Gecersiz token veya userId bulunamadi. Lutfen refresh token ile token yenileyin',
+      );
+    }
+
+    return this.msClient.send(
+      'booking-service',
+      { cmd: 'get-user-bookings' },
+      userId,
     );
   }
 }
