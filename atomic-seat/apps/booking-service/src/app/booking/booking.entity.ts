@@ -70,6 +70,12 @@ export class Booking {
   @OneToMany(() => BookingSeat, (bookingSeat) => bookingSeat.booking)
   booking_seats: BookingSeat[];
 
+  @Column({ nullable: true })
+  payment_session_id: string;
+
+  @Column({ nullable: true })
+  payment_provider: string;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 

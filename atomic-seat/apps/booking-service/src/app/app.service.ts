@@ -79,34 +79,60 @@ export class AppService {
 
       console.log(`✅ Booking basariyla olusturuldu ${savedBooking}`);
 
-      try {
-        await this.kafkaClient.emit('booking-created', {
-          bookingId: savedBooking.id,
+      const paymentSession = await this.msClient.send(
+        'payment-service',
+        {
+          cmd: 'create-payment-session',
+        },
+        {
+          bookingId: bookingId,
           userId: dto.userId,
-          eventId: dto.eventId,
-          seatIds: dto.seatIds,
-          totalPrice: reserveSeatsResult.totalPrice,
+          amount: reserveSeatsResult.totalPrice,
           currency: 'TRY',
-          expiresAt: expiresAt,
-        });
-      } catch (error) {
-        this.logger.error(
-          `🚨 Booking eventi kafka'ya yayinirken hata: ${error}`,
-        );
-        console.log(`🚨 Booking eventi kafka'ya yayinirken hata: ${error}`);
-      }
+          description: `Event biletleri - ${dto.seatIds.length} koltuk`,
+          metadata: {
+            eventId: savedBooking.event_id,
+            seatCount: dto.seatIds.length,
+          },
+        },
+      );
 
-      return savedBooking;
+      console.log(
+        `✅ Payment session oluşturuldu: ${paymentSession.sessionId}`,
+      );
+
+      const reamingTime = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+
+      return {
+        bookingId: savedBooking.id,
+        eventId: savedBooking.event_id,
+        seatIds: savedBooking.seat_ids,
+        totalPrice: Number(savedBooking.total_price),
+        currency: savedBooking.currency,
+        status: savedBooking.status,
+        expiresAt: expiresAt.toISOString(),
+        checkoutUrl: paymentSession.checkoutUrl,
+        checkoutToken: paymentSession.token,
+
+        message: 'Rezervasyon basarili. Lutfen 15 dakika icinde odeme yapin',
+        reamingTime: reamingTime,
+      };
     } catch (dbError) {
       console.error(`🚨 Database hatasi! Rezervasyon geri aliniyor`);
 
-      this.msClient.send(
-        'catalog-service',
-        { cmd: 'catalog-seats-release' },
-        {
-          bookingId: bookingId,
-        },
-      );
+      try {
+        this.msClient.send(
+          'catalog-service',
+          { cmd: 'catalog-seats-release' },
+          {
+            seatIds: dto.seatIds,
+            bookingId: bookingId,
+          },
+        );
+        console.log('✅ Koltuklar serbest bırakıldı');
+      } catch (releaseError) {
+        console.error('❌ Koltuk serbest bırakma hatası:', releaseError);
+      }
 
       throw new BadRequestException('Rezervasyon olusturulurken hata.');
     }
@@ -147,9 +173,15 @@ export class AppService {
     });
 
     console.log(`✅ Booking onaylandi`);
+
+    return {
+      success: true,
+      message: 'Booking onaylandi',
+      bookingId: bookingId,
+    };
   }
 
-  async cancelBooking(bookingId: string, reason: string): Promise<void> {
+  async cancelBooking(bookingId: string, reason: string) {
     const booking = await this.bookingRepo.findOne({
       where: { id: bookingId },
     });
@@ -184,6 +216,12 @@ export class AppService {
     });
 
     console.log(`🚨 Booking Iptal edildi: ${bookingId} - ${reason}`);
+
+    return {
+      success: true,
+      message: 'Booking iptal edildi',
+      bookingId: bookingId,
+    };
   }
 
   async getUserBookings(userId: string): Promise<Booking[]> {
