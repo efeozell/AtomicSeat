@@ -324,4 +324,17 @@ export class AppService {
       );
     }
   }
+
+  async getUserById(userId: string) {
+    try {
+      const user = await this.userService.findById(userId);
+      if (!user) {
+        return { error: true, message: 'Kullanici bulunamadi' };
+      }
+      return { error: false, data: user };
+    } catch (error) {
+      console.error('getUserById error:', error);
+      return { error: true, message: 'Kullanici bilgisi alinamadi' };
+    }
+  }
 }

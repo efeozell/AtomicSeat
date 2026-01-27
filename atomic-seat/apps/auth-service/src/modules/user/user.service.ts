@@ -71,7 +71,7 @@ export class UserService {
   async findById(id: string) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) {
-      throw new BadGatewayException('Kullanici bulunamadi');
+      return null; // Mikroservislerde null dön
     }
 
     const { password, ...userWithoutPassword } = user;

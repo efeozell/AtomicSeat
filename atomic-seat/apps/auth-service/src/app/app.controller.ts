@@ -41,4 +41,9 @@ export class AppController {
   async refreshToken(token: string) {
     return this.appService.checkRefreshToken(token);
   }
+
+  @MessagePattern({ cmd: 'get-user-by-id' })
+  async getUserById(userId: string) {
+    return this.appService.getUserById(userId);
+  }
 }
