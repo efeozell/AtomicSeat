@@ -8,6 +8,7 @@ import { Booking } from './booking/booking.entity';
 import { BookingSeat } from './booking/booking-seat.entity';
 import { BookingsCron } from './booking/booking.cron';
 import { ScheduleModule } from '@nestjs/schedule';
+import { KafkaConsumerService } from './kafka/kafka-consumer.service';
 
 @Module({
   imports: [
@@ -15,29 +16,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     DatabaseModule.forRoot('BOOKING_DB_NAME'),
     TypeOrmModule.forFeature([Booking, BookingSeat]),
     SharedModule,
-    ClientsModule.register([
-      {
-        name: 'BOOKING_SERVICE',
-        transport: Transport.KAFKA,
-        options: {
-          client: {
-            brokers: ['localhost:9092'],
-            retry: {
-              initialRetryTime: 300,
-              retries: 10,
-            },
-          },
-          consumer: {
-            groupId: 'booking-producer-group',
-          },
-          producer: {
-            allowAutoTopicCreation: true,
-          },
-        },
-      },
-    ]),
   ],
   controllers: [AppController],
-  providers: [AppService, BookingsCron],
+  providers: [AppService, BookingsCron, KafkaConsumerService],
 })
 export class AppModule {}
