@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,19 +10,24 @@ import {
   PaymentProvider,
   PaymentStatus,
 } from './payment/payment.entity';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Iyzipay from 'iyzipay';
 import { MicroserviceClientService } from '@atomic-seat/shared';
+import { OutboxEvent, OutboxStatus } from './outbox/outbox.entity';
 
 @Injectable()
 export class AppService {
   private iyzico: any;
+  private readonly logger = new Logger(AppService.name);
 
   constructor(
     @InjectRepository(Payment)
     private paymentRepo: Repository<Payment>,
+    @InjectRepository(OutboxEvent)
+    private outboxRepo: Repository<OutboxEvent>,
+    private dataSource: DataSource,
     private configService: ConfigService,
     private readonly msClient: MicroserviceClientService,
   ) {
@@ -211,44 +217,89 @@ export class AppService {
     return { success: true };
   }
 
-  private async completePayment(paymentId: string, providerPaymentId: string) {
-    const payment = await this.paymentRepo.findOne({
-      where: { id: paymentId },
+  private async completePayment(
+    paymentId: string,
+    providerPaymentId: string,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const payment = await manager.findOne(Payment, {
+        where: { id: paymentId },
+      });
+
+      if (!payment) throw new Error('Payment bulunamadi');
+
+      // 1- Payment status guncelle
+      payment.status = PaymentStatus.COMPLETED;
+      payment.provider_payment_id = providerPaymentId;
+      payment.completed_at = new Date();
+
+      await manager.save(payment);
+
+      this.logger.log(`✅ Payment tamamlandi: ${paymentId}`);
+
+      // 2- Outbox event olustur
+      const outboxEvent = manager.create(OutboxEvent, {
+        aggregate_type: 'payment',
+        aggregate_id: paymentId,
+        event_type: 'payment.completed',
+        payload: {
+          paymentId: payment.id,
+          bookingId: payment.booking_id,
+          userId: payment.user_id,
+          amount: payment.amount,
+          currency: payment.currency,
+          providerPaymentId: providerPaymentId,
+          completedAt: new Date().toISOString(),
+        },
+        status: OutboxStatus.PENDING,
+        retry_count: 0,
+        max_retries: 3,
+      });
+
+      await manager.save(outboxEvent);
+
+      this.logger.log(
+        `📤 Outbox event (completed) olusturuldu: ${outboxEvent.id}`,
+      );
     });
-
-    if (!payment) return;
-
-    payment.status = PaymentStatus.COMPLETED;
-    payment.provider_payment_id = providerPaymentId;
-    payment.completed_at = new Date();
-    await this.paymentRepo.save(payment);
-
-    console.log(`✅ Payment tamamlandi: ${paymentId}`);
-
-    await this.msClient.send(
-      'booking-service',
-      { cmd: 'confirm-booking' },
-      { bookingId: payment.booking_id, paymentId: payment.id },
-    );
   }
 
   private async failPayment(paymentId: string, reason: string) {
-    const payment = await this.paymentRepo.findOne({
-      where: { id: paymentId },
+    await this.dataSource.transaction(async (manager) => {
+      const payment = await manager.findOne(Payment, {
+        where: { id: paymentId },
+      });
+
+      if (!payment) throw new Error('Payment bulunamadi');
+
+      // 1- Payment status guncelle
+      payment.status = PaymentStatus.FAILED;
+      payment.error_message = reason;
+
+      await manager.save(payment);
+
+      this.logger.log(`❌ Payment basarisiz: ${paymentId}, sebep: ${reason}`);
+
+      // 2- Outbox event olustur
+      const outboxEvent = manager.create(OutboxEvent, {
+        aggregate_type: 'payment',
+        aggregate_id: paymentId,
+        event_type: 'payment.failed',
+        payload: {
+          paymentId: paymentId,
+          bookingId: payment.booking_id,
+          userId: payment.user_id,
+          errorMessage: reason,
+          failedAt: new Date().toISOString(),
+        },
+        status: OutboxStatus.PENDING,
+      });
+
+      await manager.save(outboxEvent);
+
+      this.logger.log(
+        `📤 Outbox event (failed) olusturuldu: ${outboxEvent.id}`,
+      );
     });
-
-    if (!payment) return;
-
-    payment.status = PaymentStatus.FAILED;
-    payment.error_message = reason;
-    await this.paymentRepo.save(payment);
-
-    console.log(`❌ Payment basarisiz: ${paymentId}`);
-
-    await this.msClient.send(
-      'booking-service',
-      { cmd: 'cancel-booking' },
-      { bookingId: payment.booking_id, reason: `Odeme basarisiz: ${reason}` },
-    );
   }
 }

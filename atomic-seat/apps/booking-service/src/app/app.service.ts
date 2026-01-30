@@ -21,7 +21,6 @@ export class AppService {
     @InjectRepository(Booking)
     private readonly bookingRepo: Repository<Booking>,
     private readonly msClient: MicroserviceClientService,
-    @Inject('BOOKING_SERVICE') private readonly kafkaClient: ClientKafka,
   ) {}
 
   async createBooking(dto: CreateBookingDto) {
@@ -79,29 +78,37 @@ export class AppService {
 
       console.log(`✅ Booking basariyla olusturuldu ${savedBooking}`);
 
-      const paymentSession = await this.msClient.send(
-        'payment-service',
-        {
-          cmd: 'create-payment-session',
-        },
-        {
-          bookingId: bookingId,
-          userId: dto.userId,
-          amount: reserveSeatsResult.totalPrice,
-          currency: 'TRY',
-          description: `Event biletleri - ${dto.seatIds.length} koltuk`,
-          metadata: {
-            eventId: savedBooking.event_id,
-            seatCount: dto.seatIds.length,
+      let paymentSession;
+      try {
+        paymentSession = await this.msClient.send(
+          'payment-service',
+          {
+            cmd: 'create-payment-session',
           },
-        },
-      );
+          {
+            bookingId: bookingId,
+            userId: dto.userId,
+            amount: reserveSeatsResult.totalPrice,
+            currency: 'TRY',
+            description: `Event biletleri - ${dto.seatIds.length} koltuk`,
+            metadata: {
+              eventId: savedBooking.event_id,
+              seatCount: dto.seatIds.length,
+            },
+          },
+        );
+      } catch (paymentError) {
+        this.logger.error(`Paymnet session hatasi: ${paymentError}`);
+        throw new BadRequestException('Odeme oturumu olusturulamadi');
+      }
 
       console.log(
         `✅ Payment session oluşturuldu: ${paymentSession.sessionId}`,
       );
 
-      const reamingTime = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+      const remainingTime = Math.floor(
+        (expiresAt.getTime() - Date.now()) / 1000,
+      );
 
       return {
         bookingId: savedBooking.id,
@@ -115,13 +122,13 @@ export class AppService {
         checkoutToken: paymentSession.token,
 
         message: 'Rezervasyon basarili. Lutfen 15 dakika icinde odeme yapin',
-        reamingTime: reamingTime,
+        remainingTime: remainingTime,
       };
     } catch (dbError) {
       console.error(`🚨 Database hatasi! Rezervasyon geri aliniyor`);
 
       try {
-        this.msClient.send(
+        await this.msClient.send(
           'catalog-service',
           { cmd: 'catalog-seats-release' },
           {
@@ -147,8 +154,39 @@ export class AppService {
       throw new BadRequestException('Booking bulunamadi');
     }
 
+    if (booking.status === BookingStatus.CONFIRMED) {
+      if (booking.payment_id === paymentId) {
+        this.logger.warn(
+          `♻️ Bu booking zaten bu odeme ID ile onaylanmis. Islem atlaniyor. ID: ${bookingId}`,
+        );
+
+        return {
+          success: true,
+          message: 'Booking zaten onaylandi (Idempotent)',
+          bookingId: bookingId,
+        };
+      } else {
+        //Booking onayli ancak farkli bir paymentId ile
+        this.logger.error(
+          `⚠️ Catisma: Booking onyali ama farkli payment ID Mevcut: ${booking.payment_id}, Gelen: ${paymentId}`,
+        );
+        throw new BadRequestException(
+          'Booking zaten farkli bir payment islemi ile birlikte onaylanmis',
+        );
+      }
+    }
+
     if (booking.status !== BookingStatus.PENDING) {
-      throw new BadRequestException('Booking onaylanamaz, durumu uygun degil');
+      throw new BadRequestException(
+        `Booking durumu uygun değil: ${booking.status}`,
+      );
+    }
+
+    if (new Date() > booking.expires_at) {
+      throw new Error(
+        `Booking suresi dolmus: ${bookingId}` +
+          `(expires: ${booking.expires_at})`,
+      );
     }
 
     try {
@@ -173,6 +211,7 @@ export class AppService {
     });
 
     console.log(`✅ Booking onaylandi`);
+    //TODO: Email gonder.
 
     return {
       success: true,
@@ -191,13 +230,16 @@ export class AppService {
     }
 
     if (booking.status === BookingStatus.CANCELLED) {
-      throw new BadRequestException('Booking zaten iptal edilmis');
+      this.logger.warn(`Bu booking zaten iptal edilmiş: ${bookingId}`);
+      return { success: true, message: 'Zaten iptal edilmiş' };
     }
 
     if (booking.status === BookingStatus.CONFIRMED) {
       this.logger.warn(`Onaylanmis booking iptal ediliyor: ${bookingId}`);
+      throw new BadRequestException('Tamamlanmis booking iptal edilemez');
     }
 
+    //TODO: Burada ya telafi yaz ya da buradaki mantigi Event-Driven'a cevir
     await this.msClient.send(
       'catalog-service',
       {
