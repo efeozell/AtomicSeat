@@ -19,7 +19,20 @@ export class RabbitMQConfig implements OnModuleInit, OnModuleDestroy {
   private async setupRabbitMQ() {
     try {
       this.connection = await amqp.connect('amqp://localhost:5672');
+      this.connection.on('error', (err) => {
+        this.logger.error('RabbitMQ connection error', err);
+      });
+      this.connection.on('close', () => {
+        this.logger.warn('RabbitMQ connection closed');
+      });
+
       this.channel = await this.connection.createChannel();
+      this.channel.on('error', (err) => {
+        this.logger.error('RabbitMQ channel error', err);
+      });
+      this.channel.on('close', () => {
+        this.logger.warn('RabbitMQ channel closed');
+      });
 
       this.logger.log('✅ RabbitMQ baglantisi kuruldu');
 
