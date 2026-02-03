@@ -44,7 +44,9 @@
         "apps/booking-service-e2e/**/*",
         "apps/payment-service-e2e/**/*",
         "catalog-service-e2e/**/*",
-        "apps/catalog-service-e2e/**/*"
+        "apps/catalog-service-e2e/**/*",
+        "notification-service-e2e/**/*",
+        "apps/notification-service-e2e/**/*"
       ]
     }
   ]
