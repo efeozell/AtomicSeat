@@ -6,6 +6,16 @@
 
 Proje, **NestJS** framework'ü ve **Nx Monorepo** yapısı kullanılarak geliştirilmiştir. Mikroservisler arası iletişim için **Kafka**, **RabbitMQ** ve **REST API** kullanılmaktadır.
 
+### Diagramlar
+
+Sistem Mimarisi
+<img width="1917" height="1296" alt="image" src="https://github.com/user-attachments/assets/8064af19-7783-4b94-b395-1d3b5299f787" />
+
+Servisler Arası İletişim
+<img width="1748" height="1059" alt="image" src="https://github.com/user-attachments/assets/b8b94ccb-f995-48d6-b05b-fb4b68305050" />
+
+
+
 ### Mikroservisler
 
 ```
