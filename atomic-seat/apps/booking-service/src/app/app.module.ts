@@ -9,6 +9,7 @@ import { BookingSeat } from './booking/booking-seat.entity';
 import { BookingsCron } from './booking/booking.cron';
 import { ScheduleModule } from '@nestjs/schedule';
 import { KafkaConsumerService } from './kafka/kafka-consumer.service';
+import { NotificationPublisherService } from './notification/notification-publisher.service';
 
 @Module({
   imports: [
@@ -18,6 +19,11 @@ import { KafkaConsumerService } from './kafka/kafka-consumer.service';
     SharedModule,
   ],
   controllers: [AppController],
-  providers: [AppService, BookingsCron, KafkaConsumerService],
+  providers: [
+    AppService,
+    BookingsCron,
+    KafkaConsumerService,
+    NotificationPublisherService,
+  ],
 })
 export class AppModule {}

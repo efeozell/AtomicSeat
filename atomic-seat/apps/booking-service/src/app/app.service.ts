@@ -13,6 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Booking, BookingStatus } from './booking/booking.entity';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import { NotificationPublisherService } from './notification/notification-publisher.service';
 
 @Injectable()
 export class AppService {
@@ -21,6 +22,7 @@ export class AppService {
     @InjectRepository(Booking)
     private readonly bookingRepo: Repository<Booking>,
     private readonly msClient: MicroserviceClientService,
+    private notificationPublisher: NotificationPublisherService,
   ) {}
 
   async createBooking(dto: CreateBookingDto) {
@@ -176,6 +178,17 @@ export class AppService {
       }
     }
 
+    if (booking.status === BookingStatus.CANCELLED) {
+      this.logger.warn(
+        `⚠️ Iptal edilmis booking icin odeme onayi geldi islem durduluyor ID: ${bookingId}`,
+      );
+      return {
+        success: false,
+        message: 'Booking iptal edildigi icin onaylanamaz',
+        bookingId: bookingId,
+      };
+    }
+
     if (booking.status !== BookingStatus.PENDING) {
       throw new BadRequestException(
         `Booking durumu uygun değil: ${booking.status}`,
@@ -211,7 +224,47 @@ export class AppService {
     });
 
     console.log(`✅ Booking onaylandi`);
-    //TODO: Email gonder.
+
+    try {
+      const user = await this.getUserDetails(booking.user_id);
+
+      if (!user) {
+        this.logger.error(
+          `❌ User not found for booking ${bookingId}, userId: ${booking.user_id}`,
+        );
+
+        this.logger.warn(
+          `⚠️ Skipping notification for booking ${booking.id} - user not found`,
+        );
+
+        return {
+          success: true,
+          message:
+            'Booking onaylandi (notification skipped because user not found)',
+          bookingId: bookingId,
+        };
+      }
+
+      this.logger.debug(
+        `Booking service'de user geliyor mu kontrolu User: ${user} : ${user.email}`,
+      );
+
+      await this.notificationPublisher.publishBookingConfirmed({
+        bookingId: booking.id,
+        userId: booking.user_id,
+        userEmail: user.email || 'efeqozel@gmail.com',
+        userPhone: user.address || '',
+        userName: user.name,
+        eventType: 'send-email',
+        eventName: booking.event_id,
+        seatDetails: booking.seat_ids,
+        totalPrice: Number(booking.total_price),
+      });
+
+      this.logger.log(`📤 Notification published for booking ${bookingId}`);
+    } catch (error) {
+      this.logger.error(`Bildirim yayinlanirken hata: ${error}`);
+    }
 
     return {
       success: true,
@@ -271,5 +324,13 @@ export class AppService {
       where: { user_id: userId },
       order: { created_at: 'DESC' },
     });
+  }
+
+  async getUserDetails(userId: string) {
+    return await this.msClient.send(
+      'auth-service',
+      { cmd: 'get-user-by-id' },
+      userId,
+    );
   }
 }
